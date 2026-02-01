@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <title>My Todo</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <div class="card big">
+      <div class="topbar">
+        <h2>My Todo</h2>
+
+        <div class="nav">
+          <a href="todos.html">Todos</a>
+          <a class="active" href="mytodo.html">My Todo</a>
+          <button id="logoutBtn" type="button">Logout</button>
+        </div>
+      </div>
+
+      <p id="err" class="err"></p>
+      <div id="list" class="list"></div>
+    </div>
+
+    <!-- ✅ EDIT MODAL -->
+    <div id="editOverlay" class="modal-overlay hidden">
+      <div class="modal">
+        <h3>Edit Todo</h3>
+
+        <input id="editTitle" type="text" placeholder="Yangi title..." />
+
+        <div class="modal-actions">
+          <button id="editCancel" type="button" class="btn-ghost">Bekor</button>
+          <button id="editSave" type="button" class="btn-primary">
+            Saqlash
+          </button>
+        </div>
+
+        <p id="editErr" class="err"></p>
+      </div>
+    </div>
+
+    <!-- ✅ DELETE MODAL -->
+    <div id="delOverlay" class="modal-overlay hidden">
+      <div class="modal">
+        <h3>Todo o‘chirilsinmi?</h3>
+
+        <p class="muted" id="delText" style="margin-top: 6px">
+          Bu todo o‘chiriladi. Qaytarib bo‘lmaydi.
+        </p>
+
+        <div class="modal-actions">
+          <button id="delCancel" type="button" class="btn-ghost">Yo‘q</button>
+          <button
+            id="delYes"
+            type="button"
+            class="btn-primary"
+            style="background: #e53935"
+          >
+            Ha, o‘chir
+          </button>
+        </div>
+
+        <p id="delErr" class="err"></p>
+      </div>
+    </div>
+
+    <script>
+      // ✅ backend portingiz
+      const BASE_URL = "http://localhost:4000";
+
+      const errEl = document.getElementById("err");
+      const listEl = document.getElementById("list");
+
+      // EDIT modal elements
+      const editOverlay = document.getElementById("editOverlay");
+      const editTitle = document.getElementById("editTitle");
+      const editCancel = document.getElementById("editCancel");
+      const editSave = document.getElementById("editSave");
+      const editErr = document.getElementById("editErr");
+
+      // DELETE modal elements
+      const delOverlay = document.getElementById("delOverlay");
+      const delText = document.getElementById("delText");
+      const delCancel = document.getElementById("delCancel");
+      const delYes = document.getElementById("delYes");
+      const delErr = document.getElementById("delErr");
+
+      let editingId = null;
+      let deletingId = null;
+
+      function getToken() {
+        return localStorage.getItem("token");
+      }
+
+      function requireAuth() {
+        if (!getToken()) location.href = "login.html";
+      }
+
+      function parseJwt(token) {
+        try {
+          const payload = token.split(".")[1];
+          const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+          return JSON.parse(json); // { user_id: "..." }
+        } catch {
+          return null;
+        }
+      }
+
+      async function request(path, options = {}) {
+        const token = getToken();
+
+        const res = await fetch(BASE_URL + path, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: "Bearer " + token } : {}),
+            ...(options.headers || {}),
+          },
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Request failed");
+        return data;
+      }
+
+      // ---------- EDIT MODAL ----------
+      function openEditModal(todoId, currentTitle) {
+        editingId = todoId;
+        editErr.textContent = "";
+        editTitle.value = currentTitle || "";
+        editOverlay.classList.remove("hidden");
+        editTitle.focus();
+      }
+
+      function closeEditModal() {
+        editingId = null;
+        editOverlay.classList.add("hidden");
+      }
+
+      // ---------- DELETE MODAL ----------
+      function openDeleteModal(todoId, todoTitle) {
+        deletingId = todoId;
+        delErr.textContent = "";
+        delText.innerHTML = `"<b>${escapeHtml(todoTitle || "")}</b>" todo o‘chiriladi. Qaytarib bo‘lmaydi.`;
+        delOverlay.classList.remove("hidden");
+        delYes.focus();
+      }
+
+      function closeDeleteModal() {
+        deletingId = null;
+        delOverlay.classList.add("hidden");
+      }
+
+      // XSS/HTML break bo‘lmasligi uchun
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      async function loadMyTodos() {
+        errEl.textContent = "";
+        listEl.innerHTML = "Loading...";
+
+        try {
+          const token = getToken();
+          const me = parseJwt(token);
+
+          if (!me?.user_id) {
+            throw new Error(
+              "Token payload xato (user_id topilmadi). Qayta login qiling.",
+            );
+          }
+
+          const data = await request("/api/todo/all", { method: "GET" });
+          const todos = data.data || [];
+
+          // faqat o'ziniki
+          const myTodos = todos.filter(t => {
+            const ownerId = t.user_id?._id || t.user_id;
+            return String(ownerId) === String(me.user_id);
+          });
+
+          listEl.innerHTML = "";
+          if (!myTodos.length) {
+            listEl.innerHTML = `<p class="muted">Sizda todo yo‘q</p>`;
+            return;
+          }
+
+          myTodos.forEach(t => {
+            const div = document.createElement("div");
+            div.className = "todo";
+
+            const safeTitleAttr = escapeHtml(t.title);
+
+            div.innerHTML = `
+            <div>
+              <div><b>${escapeHtml(t.title)}</b></div>
+              <div class="meta">ID: ${t._id}</div>
+            </div>
+            <div class="actions">
+              <button
+                type="button"
+                data-edit="${t._id}"
+                data-title="${safeTitleAttr}"
+              >Edit</button>
+
+              <button
+                type="button"
+                class="danger"
+                data-del="${t._id}"
+                data-title="${safeTitleAttr}"
+              >Delete</button>
+            </div>
+          `;
+
+            listEl.appendChild(div);
+          });
+        } catch (err) {
+          listEl.innerHTML = "";
+          errEl.textContent = err.message;
+        }
+      }
+
+      // list click (delete/edit)
+      listEl.addEventListener("click", async e => {
+        const delId = e.target.getAttribute("data-del");
+        const editId = e.target.getAttribute("data-edit");
+
+        if (delId) {
+          const title = e.target.getAttribute("data-title") || "";
+          openDeleteModal(delId, title);
+          return;
+        }
+
+        if (editId) {
+          const currentTitle = e.target.getAttribute("data-title") || "";
+          openEditModal(editId, currentTitle);
+          return;
+        }
+      });
+
+      // ---------- EDIT EVENTS ----------
+      editCancel.addEventListener("click", closeEditModal);
+
+      editOverlay.addEventListener("click", e => {
+        if (e.target === editOverlay) closeEditModal();
+      });
+
+      editTitle.addEventListener("keydown", e => {
+        if (e.key === "Enter") editSave.click();
+        if (e.key === "Escape") closeEditModal();
+      });
+
+      editSave.addEventListener("click", async () => {
+        try {
+          editErr.textContent = "";
+
+          const newTitle = editTitle.value.trim();
+          if (!newTitle) {
+            editErr.textContent = "Title bo‘sh bo‘lmasin!";
+            return;
+          }
+
+          if (!editingId) {
+            editErr.textContent = "Edit ID topilmadi. Sahifani yangilang.";
+            return;
+          }
+
+          await request("/api/todo/" + editingId, {
+            method: "PUT",
+            body: JSON.stringify({ title: newTitle }),
+          });
+
+          closeEditModal();
+          await loadMyTodos();
+        } catch (err) {
+          editErr.textContent = err.message;
+        }
+      });
+
+      // ---------- DELETE EVENTS ----------
+      delCancel.addEventListener("click", closeDeleteModal);
+
+      delOverlay.addEventListener("click", e => {
+        if (e.target === delOverlay) closeDeleteModal();
+      });
+
+      // ESC delete modal yopilsin
+      document.addEventListener("keydown", e => {
+        if (e.key === "Escape") {
+          if (!editOverlay.classList.contains("hidden")) closeEditModal();
+          if (!delOverlay.classList.contains("hidden")) closeDeleteModal();
+        }
+      });
+
+      delYes.addEventListener("click", async () => {
+        try {
+          delErr.textContent = "";
+
+          if (!deletingId) {
+            delErr.textContent = "Delete ID topilmadi. Sahifani yangilang.";
+            return;
+          }
+
+          await request("/api/todo/" + deletingId, { method: "DELETE" });
+
+          closeDeleteModal();
+          await loadMyTodos();
+        } catch (err) {
+          delErr.textContent = err.message;
+        }
+      });
+
+      document.getElementById("logoutBtn").addEventListener("click", () => {
+        localStorage.removeItem("token");
+        location.href = "login.html";
+      });
+
+      requireAuth();
+      loadMyTodos();
+    </script>
+  </body>
+</html>

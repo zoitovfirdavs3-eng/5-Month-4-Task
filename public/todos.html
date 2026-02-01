@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Todos</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <div class="card big">
+      <div class="topbar">
+        <h2>Todos (All)</h2>
+        <div class="nav">
+          <a class="active" href="todos.html">Todos</a>
+          <a href="mytodo.html">My Todo</a>
+          <button id="logoutBtn" type="button">Logout</button>
+        </div>
+      </div>
+
+      <form id="createForm" class="row">
+        <input id="title" type="text" placeholder="Yangi todo..." required />
+        <button type="submit">Qo‘shish</button>
+      </form>
+
+      <p id="err" class="err"></p>
+      <div id="list" class="list"></div>
+    </div>
+
+    <script>
+      // ✅ Sizning server portingiz 4000
+      const BASE_URL = "http://localhost:4000";
+
+      const errEl = document.getElementById("err");
+      const listEl = document.getElementById("list");
+
+      function getToken() {
+        return localStorage.getItem("token");
+      }
+
+      function requireAuth() {
+        if (!getToken()) location.href = "login.html";
+      }
+
+      // ✅ request function (to‘liq)
+      async function request(path, options = {}) {
+        const token = getToken();
+
+        const res = await fetch(BASE_URL + path, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: "Bearer " + token } : {}),
+            ...(options.headers || {}),
+          },
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Request failed");
+        return data;
+      }
+
+      async function loadTodos() {
+        errEl.textContent = "";
+        listEl.innerHTML = "Loading...";
+
+        try {
+          const data = await request("/api/todo/all", { method: "GET" });
+          const todos = data.data || [];
+
+          listEl.innerHTML = "";
+          if (!todos.length) {
+            listEl.innerHTML = `<p class="muted">Hali todo yo‘q</p>`;
+            return;
+          }
+
+          todos.forEach(t => {
+            const div = document.createElement("div");
+            div.className = "todo";
+            div.innerHTML = `
+            <div>
+              <div><b>${t.title}</b></div>
+              <div class="meta">ID: ${t._id}</div>
+            </div>
+          `;
+            listEl.appendChild(div);
+          });
+        } catch (err) {
+          listEl.innerHTML = "";
+          errEl.textContent = err.message;
+        }
+      }
+
+      document
+        .getElementById("createForm")
+        .addEventListener("submit", async e => {
+          e.preventDefault();
+          errEl.textContent = "";
+
+          const titleEl = document.getElementById("title");
+          const title = titleEl.value.trim();
+          if (!title) return;
+
+          try {
+            await request("/api/todo/create", {
+              method: "POST",
+              body: JSON.stringify({ title }),
+            });
+
+            titleEl.value = "";
+            await loadTodos();
+          } catch (err) {
+            errEl.textContent = err.message;
+          }
+        });
+
+      document.getElementById("logoutBtn").addEventListener("click", () => {
+        localStorage.removeItem("token");
+        location.href = "login.html";
+      });
+
+      requireAuth();
+      loadTodos();
+    </script>
+  </body>
+</html>
