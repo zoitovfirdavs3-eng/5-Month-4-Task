@@ -13,47 +13,21 @@
         <input id="firstname" type="text" placeholder="Firstname" required />
         <input id="lastname" type="text" placeholder="Lastname" required />
 
-        <input
-          id="age"
-          type="number"
-          placeholder="Age"
-          min="1"
-          max="120"
-          required
-        />
+        <input id="age" type="number" placeholder="Age" min="1" max="120" required />
 
-        <select
-          id="gender"
-          required
-          style="
-            width: 100%;
-            padding: 11px 12px;
-            border-radius: 10px;
-            border: 1px solid #ddd;
-            margin-top: 10px;
-          "
-        >
+        <select id="gender" required class="select">
           <option value="" selected disabled>Gender tanlang</option>
           <option value="male">Male</option>
           <option value="female">Female</option>
         </select>
 
-        <input
-          id="email"
-          type="email"
-          placeholder="Email"
-          required
-          style="margin-top: 10px"
-        />
+        <input id="email" type="email" placeholder="Email" required />
         <input id="password" type="password" placeholder="Password" required />
 
-        <button type="submit" style="margin-top: 10px">
-          Ro‘yxatdan o‘tish
-        </button>
+        <button type="submit">Ro‘yxatdan o‘tish</button>
       </form>
 
       <p class="muted">Akkount bormi? <a href="login.html">Login</a></p>
-
       <p id="err" class="err"></p>
     </div>
 
@@ -70,43 +44,40 @@
           },
         });
 
-        const data = await res.json().catch(() => ({}));
+        const text = await res.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = {};
+        }
+
         if (!res.ok) throw new Error(data.message || "Request failed");
         return data;
       }
 
-      document
-        .getElementById("registerForm")
-        .addEventListener("submit", async e => {
-          e.preventDefault();
-          errEl.textContent = "";
+      document.getElementById("registerForm").addEventListener("submit", async e => {
+        e.preventDefault();
+        errEl.textContent = "";
 
-          const firstname = document.getElementById("firstname").value.trim();
-          const lastname = document.getElementById("lastname").value.trim();
-          const age = Number(document.getElementById("age").value);
-          const gender = document.getElementById("gender").value;
-          const email = document.getElementById("email").value.trim();
-          const password = document.getElementById("password").value.trim();
+        const firstname = document.getElementById("firstname").value.trim();
+        const lastname = document.getElementById("lastname").value.trim();
+        const age = Number(document.getElementById("age").value);
+        const gender = document.getElementById("gender").value;
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value.trim();
 
-          try {
-            await request("/api/auth/register", {
-              method: "POST",
-              body: JSON.stringify({
-                firstname,
-                lastname,
-                age,
-                gender,
-                email,
-                password,
-              }),
-            });
+        try {
+          await request("/api/auth/register", {
+            method: "POST",
+            body: JSON.stringify({ firstname, lastname, age, gender, email, password }),
+          });
 
-            // siz aytgandek: registerdan keyin login sahifaga
-            location.href = "login.html";
-          } catch (err) {
-            errEl.textContent = err.message;
-          }
-        });
+          location.href = "login.html";
+        } catch (err) {
+          errEl.textContent = err.message;
+        }
+      });
     </script>
   </body>
 </html>

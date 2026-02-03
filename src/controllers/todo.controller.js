@@ -29,7 +29,9 @@ module.exports = {
 
   async GET_TODO(req, res) {
     try {
-      const todos = await TodoModel.find().sort({ createdAt: -1 });
+      const todos = await TodoModel.find({ user_id: req.user.user_id }).sort({
+        createdAt: -1,
+      });
       return res.json({ status: 200, data: todos });
     } catch (err) {
       return globalError(err, res);

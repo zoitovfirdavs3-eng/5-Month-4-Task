@@ -5,7 +5,7 @@ const jwtService = require("../lib/jwt.service");
 const {
   registerValidator,
   loginValidator,
-} = require("../utils/validator/user.validator");
+} = require("../utils/validator/User.validator"); // ✅ MUHIM
 
 module.exports = {
   async REGISTER(req, res) {
